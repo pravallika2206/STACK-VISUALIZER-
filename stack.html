@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stack Visualizer</title>
+  <style>
+    :root{
+      --bg1:#0f172a; --bg2:#0ea5a3; --card:#ffffff; --muted:#6b7280; --accent:#7c3aed;
+      --glass: rgba(255,255,255,0.06);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,Ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;
+    background:linear-gradient(180deg,#0f172a 0%, #0ea5a3 60%);
+    color:#0b1220;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+    .wrap{width:1100px;max-width:100%;background:linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.92));
+      border-radius:18px;padding:18px;box-shadow:0 20px 40px rgba(2,6,23,0.3);display:grid;grid-template-columns:360px 1fr;gap:18px}
+
+    /* Left side controls */
+    .panel{background:var(--card);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:520px}
+    h1{font-size:20px;margin:0}
+    .tabs{display:flex;gap:6px}
+    .tab{flex:1;padding:8px;border-radius:8px;text-align:center;background:linear-gradient(180deg,#f8fafc,#eef2ff);
+      cursor:pointer;border:1px solid rgba(12,12,12,0.04);font-weight:600}
+    .tab.active{background:linear-gradient(180deg,#7c3aed,#5b21b6);color:white;box-shadow:0 6px 18px rgba(124,58,237,0.25)}
+
+    .control{display:flex;gap:8px;align-items:center}
+    input[type="text"], input[type="number"]{padding:8px;border-radius:8px;border:1px solid #e6e9ee;flex:1}
+    button{padding:8px 12px;border-radius:10px;border:0;cursor:pointer;background:var(--accent);color:white;font-weight:700}
+    button.ghost{background:transparent;color:var(--muted);border:1px solid #e6e9ee}
+    .info{font-size:13px;color:var(--muted)}
+
+    /* Right side visualizer */
+    .visual{background:linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.86));border-radius:12px;padding:14px;
+      display:flex;flex-direction:column}
+    .vis-top{display:flex;justify-content:space-between;align-items:center}
+    .stage{display:flex;gap:14px;margin-top:14px}
+
+    .stack-box{width:360px;background:linear-gradient(180deg,#ffffff,#fbfdff);border-radius:10px;padding:12px;
+      border:1px solid #e8eef7;box-shadow:inset 0 -6px 18px rgba(12,24,40,0.03)}
+    .slots{width:100%;height:420px;display:flex;flex-direction:column-reverse;align-items:stretch;overflow:hidden;
+      padding:6px;border-radius:8px;background:linear-gradient(180deg, rgba(15,23,42,0.02), rgba(15,23,42,0.01))}
+    .slot{height:56px;display:flex;align-items:center;justify-content:space-between;padding:10px;
+      border-top:1px dashed rgba(12,18,30,0.04);position:relative;transition:background 260ms}
+    .slot.empty{color:#c7d2fe}
+    .item{display:inline-block;padding:8px 12px;border-radius:8px;background:linear-gradient(90deg,#eef2ff,#e0e7ff);
+      font-weight:700;box-shadow:0 6px 18px rgba(99,102,241,0.12);transform-origin:center}
+
+    /* animations */
+    .fly-in{animation:flyIn .32s cubic-bezier(.2,.9,.2,1)}
+    .fly-out{animation:flyOut .28s cubic-bezier(.3,.1,.25,1)}
+    @keyframes flyIn{from{transform:translateY(18px) scale(.94);opacity:0}to{transform:none;opacity:1}}
+    @keyframes flyOut{from{transform:none;opacity:1}to{transform:translateY(18px) scale(.96);opacity:0}}
+
+    .meta{display:flex;gap:10px;align-items:center}
+    .log{background:#fbfdff;border-radius:8px;padding:10px;height:280px;overflow:auto;border:1px solid #eef2f6}
+    .log-entry{font-size:13px;padding:6px;border-bottom:1px dashed #eef2f6}
+
+    /* theory box */
+    .theory{background:linear-gradient(180deg,#ffffff,#fafafa);border-radius:8px;padding:10px;border:1px solid #eef2f6;
+      height:200px;overflow:auto}
+    footer{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+
+    /* small screens */
+    @media (max-width:1000px){.wrap{grid-template-columns:1fr;}.stack-box{width:100%}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h1>Stack Visualizer (HTML/CSS/JS)</h1>
+      <div class="tabs" role="tablist" aria-label="stack types">
+        <div class="tab active" data-type="array">Array Stack</div>
+        <div class="tab" data-type="linked">Linked Stack</div>
+        <div class="tab" data-type="dynamic">Dynamic Stack</div>
+      </div>
+
+      <div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="valueInput" type="text" placeholder="value to push (text or number)" />
+          <button id="pushBtn">PUSH</button>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="popBtn" class="ghost">POP</button>
+          <button id="peekBtn" class="ghost">PEEK</button>
+          <button id="resetBtn" class="ghost">RESET</button>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <label class="info">Capacity</label>
+          <input id="capInput" type="number" min="1" value="8" style="width:84px" />
+          <button id="setCapBtn" class="ghost">Apply</button>
+        </div>
+
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+          <div class="info">Top index: <strong id="topIdx">-</strong></div>
+          <div class="info">Size: <strong id="size">0</strong></div>
+          <div class="info">Type: <strong id="typeLabel">Array Stack</strong></div>
+        </div>
+      </div>
+
+      <div class="theory" id="theoryBox">
+        <!-- Theory content injected by JS -->
+      </div>
+
+      <div style="margin-top:auto">
+        <footer>
+          <div>Sound FX: <input id="soundToggle" type="checkbox" checked /></div>
+          <div>Built with plain HTML/CSS/JS</div>
+        </footer>
+      </div>
+
+    </div>
+
+    <div class="visual">
+      <div class="vis-top">
+        <h2 id="visTitle">Visualizer</h2>
+        <div class="meta"><div class="info">Animation: <span id="animState">idle</span></div></div>
+      </div>
+
+      <div class="stage">
+        <div class="stack-box">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <strong>Stack</strong>
+            <div class="info">Top →</div>
+          </div>
+          <div class="slots" id="slots">
+            <!-- slots generated by JS -->
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+          <div class="log" id="log"></div>
+          <div class="theory" id="theoryShort">
+            <strong>Quick Theory</strong>
+            <p id="quickTheory"></p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- model & state ---
+    const state = {
+      type: 'array',
+      capacity: 8,
+      stack: [], // for linked stack we'll simulate nodes as {id, value, next}
+      audioEnabled: true
+    }
+
+    // Elements
+    const tabs = document.querySelectorAll('.tab');
+    const typeLabel = document.getElementById('typeLabel');
+    const visTitle = document.getElementById('visTitle');
+    const capInput = document.getElementById('capInput');
+    const setCapBtn = document.getElementById('setCapBtn');
+    const valueInput = document.getElementById('valueInput');
+    const pushBtn = document.getElementById('pushBtn');
+    const popBtn = document.getElementById('popBtn');
+    const peekBtn = document.getElementById('peekBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const slotsEl = document.getElementById('slots');
+    const topIdxEl = document.getElementById('topIdx');
+    const sizeEl = document.getElementById('size');
+    const logEl = document.getElementById('log');
+    const theoryBox = document.getElementById('theoryBox');
+    const quickTheory = document.getElementById('quickTheory');
+    const soundToggle = document.getElementById('soundToggle');
+    const animState = document.getElementById('animState');
+
+    // --- audio ---
+    let audioCtx = null;
+    function playSound(type){
+      if (!state.audioEnabled) return;
+      try{
+        if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+        const ctx = audioCtx; const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type = (type==='push') ? 'sawtooth':'square';
+        o.frequency.value = (type==='push')?720:320;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.06, ctx.currentTime+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.22);
+        o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.26);
+      }catch(e){console.warn('audio failed',e)}
+    }
+
+    soundToggle.addEventListener('change',()=> state.audioEnabled = soundToggle.checked);
+
+    // --- helpers ---
+    function log(msg){
+      const d = document.createElement('div'); d.className='log-entry'; d.textContent = (new Date()).toLocaleTimeString() + ' — ' + msg;
+      logEl.prepend(d);
+      // keep 40 entries
+      while(logEl.children.length>40) logEl.removeChild(logEl.lastChild);
+    }
+
+    function renderSlots(){
+      slotsEl.innerHTML='';
+      // create fixed number of slots by capacity
+      for(let i=state.capacity-1;i>=0;i--){
+        const slot = document.createElement('div'); slot.className='slot';
+        const idx = document.createElement('div'); idx.style.fontSize='12px'; idx.style.color='#94a3b8'; idx.textContent='['+i+']';
+        const center = document.createElement('div'); center.style.flex='1'; center.style.textAlign='center';
+        if(i < state.stack.length){
+          const node = state.stack[i];
+          const it = document.createElement('div'); it.className='item fly-in'; it.textContent = node.value;
+          center.appendChild(it);
+        } else {
+          slot.classList.add('empty'); center.textContent='—';
+        }
+        slot.appendChild(idx); slot.appendChild(center);
+        slotsEl.appendChild(slot);
+      }
+      topIdxEl.textContent = state.stack.length>0 ? (state.stack.length-1) : '-';
+      sizeEl.textContent = state.stack.length;
+    }
+
+    function setType(t){
+      state.type = t; typeLabel.textContent = {array:'Array Stack', linked:'Linked Stack', dynamic:'Dynamic Stack'}[t];
+      visTitle.textContent = 'Visualizer — ' + typeLabel.textContent;
+      document.querySelectorAll('.tab').forEach(tb=>tb.classList.toggle('active', tb.dataset.type===t));
+      // update theory
+      updateTheory();
+      renderSlots();
+    }
+
+    function updateTheory(){
+      const common = `<p>A <strong>stack</strong> is a linear data structure that follows <em>LIFO</em> (last-in, first-out).
+       Main operations: <code>push</code>, <code>pop</code>, <code>peek</code>.</p>`;
+      if(state.type==='array'){
+        theoryBox.innerHTML = `<h3>Array-backed Stack</h3>${common}<p>Uses fixed array and top index. Overflow if size==capacity.
+        </p><pre>push(x): if top==capacity-1 => overflow; else top++; A[top]=x\npop(): if top==-1 => underflow; else return A[top--]</pre>`;
+        quickTheory.textContent = 'Array-backed: fixed slots, O(1) push/pop.';
+      } else if(state.type==='linked'){
+        theoryBox.innerHTML = `<h3>Linked-list Stack</h3>${common}<p>Uses nodes and head pointer; dynamic size limited by memory. 
+        Push/pop are O(1).</p><pre>push(x): node=new Node(x); node.next=head; head=node\npop(): if head==null => underflow;
+         else x=head.val; head=head.next; return x</pre>`;
+        quickTheory.textContent = 'Linked-list: dynamic, no fixed capacity in theory.';
+      } else {
+        theoryBox.innerHTML = `<h3>Dynamic/Resizable Stack</h3>${common}<p>Array-backed with resizing.
+         Typically doubles when full and halves when quarter-full.</p><pre>push(x): if size==capacity -> resize(cap*2);
+          A[size++]=x\npop(): x=A[--size]; if size<=capacity/4 -> resize(cap/2); return x</pre>`;
+        quickTheory.textContent = 'Dynamic: resizes automatically (simulated here with capacity input).';
+      }
+    }
+
+    // --- operations ---
+    let animLock = false;
+    function push(val){
+      if(animLock) return; if(val===undefined||val==='') return alert('Enter a value to push');
+      if(state.type!=='linked' && state.stack.length >= state.capacity){ log('Overflow: cannot push '+val); return }
+      // for linked stack we allow push regardless but we simulate capacity by cap for visualization
+      animLock = true; animState.textContent='animating';
+      playSound('push');
+      // create node
+      const node = {id:Date.now()+Math.random(), value: String(val)};
+
+      // animation: create a temp element that flies in to the top slot
+      const topSlot = slotsEl.querySelector('.slot:nth-child(1) div.item');
+      // insert into model then render with fly-in
+      state.stack.push(node);
+      renderSlots();
+      log('PUSH ' + node.value);
+      setTimeout(()=>{ animLock=false; animState.textContent='idle' }, 360);
+    }
+
+    function pop(){
+      if(animLock) return; if(state.stack.length===0){ log('Underflow: stack empty'); return }
+      animLock=true; animState.textContent='animating';
+      playSound('pop');
+      // visually mark top item then remove
+      const topIdx = state.stack.length-1; const topVal = state.stack[topIdx].value;
+      const firstSlot = slotsEl.querySelector('.slot');
+      if(firstSlot){
+        const it = firstSlot.querySelector('.item'); if(it){ it.classList.remove('fly-in'); it.classList.add('fly-out'); }
+      }
+      setTimeout(()=>{
+        state.stack.pop(); renderSlots(); log('POP ' + topVal); animLock=false; animState.textContent='idle';
+      }, 300);
+    }
+
+    function peek(){
+      if(state.stack.length===0){ log('PEEK: empty'); return null }
+      const v = state.stack[state.stack.length-1].value; log('PEEK ' + v); return v;
+    }
+
+    function resetStack(){ state.stack=[]; renderSlots(); log('RESET stack'); }
+
+    // set capacity
+    function setCapacity(n){ n = Math.max(1, Math.floor(Number(n) || 1)); state.capacity = n; // if shrink, truncate
+      if(state.stack.length > n){ state.stack.length = n; log('Capacity set to '+n+' — truncated stack'); } else log('Capacity set to '+n);
+      capInput.value = n; renderSlots(); }
+
+    // --- wire events ---
+    tabs.forEach(t=>t.addEventListener('click', ()=> setType(t.dataset.type)));
+    setCapBtn.addEventListener('click', ()=> setCapacity(capInput.value));
+    pushBtn.addEventListener('click', ()=> { push(valueInput.value); valueInput.value=''; });
+    popBtn.addEventListener('click', pop);
+    peekBtn.addEventListener('click', ()=> peek());
+    resetBtn.addEventListener('click', resetStack);
+
+    valueInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') pushBtn.click(); });
+
+    // initialize
+    setType('array'); setCapacity(capInput.value);
+
+    // seed some interactive example values
+    (function seed(){ const sample = ['10','20','30']; for(let s of sample) state.stack.push({id:Math.random(),value:s}); renderSlots(); 
+    log('Seeded demo values'); })();
+
+    // accessibility: expose some keyboard shortcuts
+    document.addEventListener('keydown', (e)=>{
+      if(e.key==='p' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); pushBtn.click(); }
+      if(e.key==='o' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); popBtn.click(); }
+    });
+
+  </script>
+</body>
+</html>
